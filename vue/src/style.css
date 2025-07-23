@@ -1,0 +1,3 @@
+
+.moving-icon { transform-origin: center; transition: transform 0.1s linear; }
+.custom-point-marker div { width: 100%; height: 100%; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.5); }
