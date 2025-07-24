@@ -29,7 +29,7 @@ import 'leaflet/dist/leaflet.css';
 const props = defineProps({
   geojsonUrl: { type: String, default: '/public/data/map.geojson' },
   mapCenter: { type: Array, default: () => [11.556, 104.928] },
-  mapZoom: { type: Number, default: 16 } // slightly zoomed in
+  mapZoom: { type: Number, default: 16 }
 });
 
 const mapContainer = ref(null);
@@ -69,20 +69,6 @@ onBeforeUnmount(() => {
   stopAnimation();
   if (map.value) map.value.remove();
 });
-
-watch(animationSpeed, (newSpeed) => {
-  if (movingIconMarker.value && map.value) {
-    const latLng = movingIconMarker.value.getLatLng();
-    let zoom;
-    if (newSpeed >= 180) zoom = 6;
-    else if (newSpeed >= 120) zoom = 7;
-    else if (newSpeed >= 60) zoom = 8;
-    else if (newSpeed >= 30) zoom = 9;
-    else zoom = 17;
-    map.value.flyTo(latLng, zoom, { duration: 0.25 });
-  }
-});
-
 
 watch(selectedRouteIndex, (newIndex, oldIndex) => {
   resetAnimation();
@@ -193,15 +179,23 @@ function resetAnimation() {
 
 let startTime = null;
 
+const kmPerHourToMetersPerMs = (kmh) => kmh * 1000 / 3600;
+
 function animate(timestamp) {
   if (!isAnimating.value) return;
 
   if (!startTime) startTime = timestamp;
 
   const elapsed = timestamp - startTime;
-  const totalDurationMs = 15000;
+  const totalDist = calculateTotalDistance(selectedRouteCoordinates.value);
+  const speed = animationSpeed.value;
 
-  progress.value = Math.min(elapsed / totalDurationMs, 1);
+  const speedMetersPerMs = kmPerHourToMetersPerMs(speed);
+
+  const effectiveSpeed = speedMetersPerMs * 0.2;
+  const estimatedDuration = totalDist / effectiveSpeed;
+
+  progress.value = Math.min(elapsed / estimatedDuration, 1);
 
   updateMarkerPosition();
 
@@ -225,16 +219,12 @@ function updateMarkerPosition() {
     movingIconMarker.value.setLatLng(latLng);
 
     const speed = animationSpeed.value;
-    let dynamicZoom;
+    const minZoom = 6;
+    const maxZoom = 16;
+    const zoom = Math.round(maxZoom - (speed / 300) * (maxZoom - minZoom));
+    const clampedZoom = Math.min(Math.max(zoom, minZoom), maxZoom);
 
-    // Adjust zoom-out based on speed (higher speed = more zoomed out)
-    if (speed >= 180) dynamicZoom = 6;
-    else if (speed >= 120) dynamicZoom = 7;
-    else if (speed >= 60) dynamicZoom = 8;
-    else if (speed >= 30) dynamicZoom = 9;
-    else dynamicZoom = 6;
-
-    map.value.setView(latLng, dynamicZoom);
+    map.value.setView(latLng, clampedZoom, { animate: true, duration: 0.5 });
   }
 
   if (progressPolyline.value) {
@@ -242,7 +232,6 @@ function updateMarkerPosition() {
     progressPolyline.value.setLatLngs(progressLatLngs);
   }
 }
-
 
 function createMovingIcon() {
   const startLatLng = selectedRouteCoordinates.value[0];
